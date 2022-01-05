@@ -6,14 +6,14 @@ use super::{Result, Error};
 
 // ref: https://www.w3.org/Graphics/GIF/spec-gif89a.txt
 // ref: https://wiki.whatwg.org/wiki/GIF
-pub fn decode<R>(r: R) -> Result<()> 
+pub fn decode<R>(r: R) -> Result<()>
     where R: io::Read {
     let mut reader = BitReader::endian(r, LittleEndian);
 
     if reader.read::<u8>(8)? != b'G' ||     // 'G'
         reader.read::<u8>(8)? != b'I' ||    // 'I'
         reader.read::<u8>(8)? != b'F' {     // 'F'
-        return Err(Error::FormatError); 
+        return Err(Error::FormatError);
     }
 
     reader.skip(8)?; // '8'
@@ -28,7 +28,7 @@ pub fn decode<R>(r: R) -> Result<()>
 
     let screen_width = reader.read::<u16>(16)?;
     let screen_height = reader.read::<u16>(16)?;
-    
+
     let gct_size = reader.read::<u8>(3)?;
     let gct_sort_flag = reader.read_bit()?;
     let color_resoln = reader.read::<u8>(3)? + 1;
@@ -36,9 +36,9 @@ pub fn decode<R>(r: R) -> Result<()>
 
     let bg_index = reader.read::<u8>(8)?;
     let pixel_aspect = reader.read::<u8>(8)?;
-    
+
     println!("screen_width: {}, screen_height: {}", screen_width, screen_height);
-    println!("gct_flag: {},  color_resoln: {},  gct_sort_flag: {},  gct_size: {}", 
+    println!("gct_flag: {},  color_resoln: {},  gct_sort_flag: {},  gct_size: {}",
         gct_flag, color_resoln, gct_sort_flag, gct_size);
     println!("bg_index: {}, pixel_aspect: {}", bg_index, pixel_aspect);
 
@@ -47,8 +47,8 @@ pub fn decode<R>(r: R) -> Result<()>
     if gct_flag {
         let gct_size = 2 << gct_size;
         for i in 0..gct_size {
-            let rgb = (reader.read::<u32>(8)? << 16) | 
-                (reader.read::<u32>(8)? << 8) | 
+            let rgb = (reader.read::<u32>(8)? << 16) |
+                (reader.read::<u32>(8)? << 8) |
                 reader.read::<u32>(8)? &
                 0x00ffffff;
             gct.push(rgb);
@@ -72,7 +72,7 @@ pub fn decode<R>(r: R) -> Result<()>
 
                         let mut appl_id = [0x00 as u8; 8];
                         reader.read_bytes(&mut appl_id)?;
-                        println!("appl_id: {:02X?}", appl_id); 
+                        println!("appl_id: {:02X?}", appl_id);
 
                         let mut appl_auth_code = [0x00 as u8; 3];
                         reader.read_bytes(&mut appl_auth_code)?;
@@ -81,12 +81,21 @@ pub fn decode<R>(r: R) -> Result<()>
                         let sub_block_data = read_sub_block(&mut reader)?;
                         if &appl_id == b"NETSCAPE" && &appl_auth_code == b"2.0" {
                             let mut sub_block_reader = BitReader::endian(&sub_block_data as &[u8], LittleEndian);
+                            let sub_block_size = sub_block_reader.read::<u8>(8)?;
+                            println!("sub_block_size: {}", sub_block_size);
+
+                            let sub_block_id = sub_block_reader.read::<u8>(8)?;
+                            println!("sub_block_id: {}", sub_block_id);
+                            if sub_block_id == 0x01 {
+                                // ref: http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension
+                                let loop_count = sub_block_reader.read::<u16>(16)?;
                                 println!("loop_count: {}", loop_count);
                             } else if sub_block_id == 0x02 {
                                 // ref: http://www.vurdalakov.net/misc/gif/netscape-buffering-application-extension
                                 let buffer_size = sub_block_reader.read::<u32>(32)?;
                                 println!("buffer_size: {}", buffer_size);
                             }
+                        }
                     },
                     0xf9 => { // Graphic Control Extension
                         let block_size = reader.read::<u8>(8)?; // fixed value 4
@@ -96,9 +105,9 @@ pub fn decode<R>(r: R) -> Result<()>
                         let user_input_flag = reader.read_bit()?;
                         let disposal_method = reader.read::<u8>(3)?;
                         reader.skip(3)?;    // Reserved
-                        let delay_time = reader.read::<u16>(16)?;    
+                        let delay_time = reader.read::<u16>(16)?;
                         let trans_color_index = reader.read::<u8>(8)?;
-                        println!("trans_flag: {}, user_input_flag: {}, disposal_method: {}, delay_time: {}, trans_color_index: {}", 
+                        println!("trans_flag: {}, user_input_flag: {}, disposal_method: {}, delay_time: {}, trans_color_index: {}",
                             trans_flag, user_input_flag, disposal_method, delay_time, trans_color_index);
 
                         skip_sub_block(&mut reader)?;
@@ -138,7 +147,7 @@ pub fn decode<R>(r: R) -> Result<()>
                 let lct_sort_flag = reader.read_bit()?;
                 let interlace_flag = reader.read_bit()?;
                 let lct_flag = reader.read_bit()?;
-                println!("lct_flag: {}, interlace_flag: {}, lct_sort_flag: {}, lct_size: {}", 
+                println!("lct_flag: {}, interlace_flag: {}, lct_sort_flag: {}, lct_size: {}",
                     lct_flag, interlace_flag, lct_sort_flag, lct_size);
 
                 let mut lct = Vec::new();
@@ -146,8 +155,8 @@ pub fn decode<R>(r: R) -> Result<()>
                 if lct_flag {
                     let lct_size = 2 << lct_size;
                     for i in 0..lct_size {
-                        let rgb = (reader.read::<u32>(8)? << 16) | 
-                            (reader.read::<u32>(8)? << 8) | 
+                        let rgb = (reader.read::<u32>(8)? << 16) |
+                            (reader.read::<u32>(8)? << 8) |
                             reader.read::<u32>(8)? &
                             0x00ffffff;
                         lct.push(rgb);
@@ -179,7 +188,7 @@ pub fn decode<R>(r: R) -> Result<()>
                     Vec::from_raw_parts(ptr, len, cap)
                 };
 
-                let mut bmp_file = File::create(format!("/volumes/file/data/{}.bmp", image_count))?;
+                let mut bmp_file = File::create(format!("/Users/tonyxge/Downloads/{}.bmp", image_count))?;
                 make_bmp(&mut bmp_file, image_width as u32, image_height as u32, &rgb_data)?;
             },
             0x3b => {
@@ -233,7 +242,7 @@ fn skip_sub_block<R, E>(reader: &mut BitReader<R, E>) -> Result<()>
     Ok(())
 }
 
-fn make_bmp<W>(writer: &mut W, width: u32, height: u32, data: &[u8]) -> Result<()> 
+fn make_bmp<W>(writer: &mut W, width: u32, height: u32, data: &[u8]) -> Result<()>
     where W: io::Write {
     let mut writer = BitWriter::endian(writer, LittleEndian);
     writer.write_bytes(&[b'B', b'M'])?; // bfType
@@ -247,11 +256,11 @@ fn make_bmp<W>(writer: &mut W, width: u32, height: u32, data: &[u8]) -> Result<(
     writer.write(16, 0x01)?; // biPlanes
     writer.write(16, 32)?; // biBitCount
     writer.write(32, 0x00)?; // biCompression
-    writer.write(32, 0x00)?; // biSizeImage 
-    writer.write(32, 0x00)?; // biXPelsPerMeter 
-    writer.write(32, 0x00)?; // biYPelsPerMeter 
-    writer.write(32, 0x00)?; // biClrUsed 
-    writer.write(32, 0x00)?; // biClrImportant 
+    writer.write(32, 0x00)?; // biSizeImage
+    writer.write(32, 0x00)?; // biXPelsPerMeter
+    writer.write(32, 0x00)?; // biYPelsPerMeter
+    writer.write(32, 0x00)?; // biClrUsed
+    writer.write(32, 0x00)?; // biClrImportant
     writer.write_bytes(data)?;
     Ok(())
 }
